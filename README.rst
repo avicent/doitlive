@@ -2,72 +2,87 @@
 doitlive
 ========
 
-.. image:: https://badge.fury.io/py/doitlive.svg
-  :target: http://badge.fury.io/py/doitlive
-
-.. image:: https://travis-ci.org/sloria/doitlive.svg?branch=master
-  :target: https://travis-ci.org/sloria/doitlive
-
-
 `doitlive` is a tool for live presentations in the terminal. It reads a file of shell commands and replays the commands in a fake terminal session as you type random characters.
+
+This project is a fork of `sloria/doitlive`_ aiming at introducing experimental support for markdown-based rendering of comments. If you are not after the markdown support introduced by this fork you should use the upstream project instead.
 
 
 Get it now
 ----------
 
-MacOSX with `Homebrew <http://brew.sh/>`_:
-******************************************
-
 .. code-block:: bash
 
-    $ brew update
-    $ brew install doitlive
-
-With pip:
-*********
-
-.. code-block:: bash
-
-    $ pip install doitlive
-
+    $ pip install git+https://github.com/avicent/doitlive.git
 
 Requires Python >= 2.7 or >= 3.3 with pip.
 
-Quickstart
-----------
+Differences with respect to `sloria/doitlive`_
+-----------------------------------------------
 
-1. Create a file called ``session.sh``. Fill it with bash commands.
-2. Run ``doitlive play session.sh``.
+The following magic-comments/directives are supported:
+
+- ``#doitlive commentformat: [markdown|plain]``
+    - Tells `doitlive` to interpret the comments as markdown-encoded and, provided ``commentecho`` is on, to render them using ``mdv`` (see Dependecies below). Note that the leading the hash character and the first space are stripped from the original line before rendering them as markdown.
+- ``#doitlive click: <method>``
+    - Instructs `doitlive` to call ``click.<method>()``. This can be useful to pause after echoing some of the comments.
+- ``#doitlive cd: <path>``
+    - Tells `doitlive` to quietly change the directory.
+
+In addition, a line starting with at least eight ``#`` signs will be treated as section divider and will result in a prompt to press any key to continue at the bottom of the screen prior to having the screen cleaned.
+
+Example
+-------
 
 .. code-block:: bash
 
-    $ doitlive play session.sh
+    #doitlive shell: /bin/bash
+    #doitlive prompt: default
+    #doitlive commentecho: true
+    #doitlive speed: 1000
+    #doitlive commentformat: markdown
+    
+    # # DEMONSTRATING DOITLIVE (1/2)
+    #
+    # This comment is interpreted as markdown. We can use:
+    #
+    # - Bullet lists.
+    # - Syntax _highlighting_.
+    # - Horizontal separators, as the one below.
+    #
+    # ---
+    whatis windows
+    
+    ################################################
+    # # DEMONSTRATING DOITLIVE (2/2)
+    #
+    # We can also use `#doitlive click: getchar` to insert pauses.
+    
+    #doitlive click: getchar
+    # Now we continue after the pause.
+    #
+    # ---
+    echo "That's all folks!"
 
+Dependencies
+------------
 
-3. Type like a madman.
+For best results use `avicent/mdv`_ instead of the original `axiros/mdv`_.
 
+More information
+----------------
 
-More at https://doitlive.readthedocs.io
----------------------------------------
-
-Project Links
--------------
-
-- Docs: https://doitlive.readthedocs.io/
-- Changelog: https://doitlive.readthedocs.io/en/latest/changelog.html
-- PyPI: https://pypi.python.org/pypi/doitlive
-- Issues: https://github.com/sloria/doitlive/issues
+- https://doitlive.readthedocs.io
 
 Kudos
 -----
 
-- Idea came from Jordi Hermoso's `"Revsets" talk <https://www.youtube.com/watch?list=PLLj6w0Thbv02lEXIDVO46kotA_tv_8_us&feature=player_detailpage&v=NSLvERZQSok#t=978>`_  at PyCon 2014.
-- Armin Ronacher's `click <http://click.pocoo.org/>`_ library  made this quick to implement.
-- Themes inspired by Sorin Ionescu's `prezto <https://github.com/sorin-ionescu/prezto>`_ zsh themes.
-- Hat tip to related projects `HackerTyper <http://hackertyper.com/>`_ and `PlayerPiano <http://i.wearpants.org/blog/playerpiano-amaze-your-friends/>`_
-
+- `sloria/doitlive`_
 
 License
 -------
 
-MIT licensed. See the bundled `LICENSE <https://github.com/sloria/doitlive/blob/master/LICENSE>`_ file for more details.
+MIT licensed. See the bundled `LICENSE <https://github.com/avicent/doitlive/blob/master/LICENSE>`_ file for more details.
+
+.. _`sloria/doitlive`: https://github.com/sloria/doitlive
+.. _`avicent/mdv`: https://github.com/avicent/terminal_markdown_viewer
+.. _`axiros/mdv`: https://github.com/axiros/terminal_markdown_viewer

@@ -22,10 +22,14 @@ import socket
 import subprocess
 import sys
 
+import blessed
+
 from click import echo as click_echo
 from click import style, secho, getchar
 from click.termui import strip_ansi
 import click
+
+from mdv.markdownviewer import main as mdv
 
 from doitlive.termutils import raw_mode
 from doitlive.version_control import (
@@ -36,7 +40,7 @@ from doitlive.version_control import (
     get_current_vcs_branch
 )
 
-__version__ = '2.6.0'
+__version__ = '2.6.0.1'
 __author__ = 'Steven Loria'
 __license__ = 'MIT'
 
@@ -48,7 +52,11 @@ if not PY2:
 else:
     from codecs import open  # pylint: disable=W0622
     open = open
+    import imp
+    imp.reload(sys)
+    sys.setdefaultencoding('utf-8')
 
+terminal = blessed.Terminal()
 
 THEMES = OrderedDict([
     ('default', u'{user.cyan.bold}@{hostname.blue}:{dir.green} $'),
@@ -88,7 +96,7 @@ BACKSPACE = '\x7f'
 RETURNS = {'\r', '\n'}
 OPTION_RE = re.compile(r'^#\s?doitlive\s+'
                        r'(?P<option>prompt|shell|alias|env|speed'
-                       r'|unalias|unset|commentecho):\s*(?P<arg>.+)$')
+                       r'|unalias|unset|commentecho|commentformat|click|cd):\s*(?P<arg>.+)$')
 
 TESTING = False
 
@@ -331,7 +339,7 @@ def magictype(text, prompt_template='default', speed=1):
                     cursor_position += speed
 
 def magicrun(text, shell, prompt_template='default', aliases=None,
-             envvars=None, speed=1, test_mode=False, commentecho=False):
+             envvars=None, speed=1, test_mode=False, commentecho=False, commentformat='plain'):
     magictype(text, prompt_template, speed)
     run_command(text, shell, aliases=aliases, envvars=envvars,
                 test_mode=test_mode)
@@ -448,12 +456,12 @@ class SessionState(dict):
 
     def __init__(self, shell, prompt_template, speed,
                  aliases=None, envvars=None,
-                 test_mode=False, commentecho=False):
+                 test_mode=False, commentecho=False, commentformat='plain'):
         aliases = aliases or []
         envvars = envvars or []
         dict.__init__(self, shell=shell, prompt_template=prompt_template,
                       speed=speed, aliases=aliases, envvars=envvars,
-                      test_mode=test_mode, commentecho=commentecho)
+                      test_mode=test_mode, commentecho=commentecho, commentformat=commentformat)
 
     def add_alias(self, alias):
         self['aliases'].append(alias)
@@ -490,6 +498,14 @@ class SessionState(dict):
             self['commentecho'] = doit in self.TRUTHY
         return self['commentecho']
 
+    def commentformat(self, fmt=None):
+        if fmt is not None:
+            self['commentformat'] = fmt
+            if self['commentformat'] != 'markdown':
+                self['commentformat'] = 'plain'
+        return self['commentformat']
+
+
 # Map of option names => function that modifies session state
 OPTION_MAP = {
     'prompt': lambda state, arg: state.set_template(arg),
@@ -500,11 +516,22 @@ OPTION_MAP = {
     'unalias': lambda state, arg: state.remove_alias(arg),
     'unset': lambda state, arg: state.remove_envvar(arg),
     'commentecho': lambda state, arg: state.commentecho(arg),
+    'commentformat': lambda state, arg: state.commentformat(arg),
+    'cd': lambda state, arg: os.chdir(arg),
+    'click': lambda state, arg: getattr(click, arg)(),
 }
 
 SHELL_RE = re.compile(r'```(python|ipython)')
+def print_comments(state, comments_buffer):
+    if comments_buffer:
+        if state.commentformat() == 'markdown':
+            echo(mdv("\n".join(comments_buffer), theme="630.2337"), nl=False)
+        else:
+            secho("\n".join(comments_buffer))
+        del comments_buffer[:]
+
 def run(commands, shell='/bin/bash', prompt_template='default', speed=1,
-        quiet=False, test_mode=False, commentecho=False):
+        quiet=False, test_mode=False, commentecho=False, commentformat='plain'):
     if not quiet:
         secho("We'll do it live!", fg='red', bold=True)
         secho('STARTING SESSION: Press Ctrl-C at any time to exit.',
@@ -514,56 +541,72 @@ def run(commands, shell='/bin/bash', prompt_template='default', speed=1,
     click.clear()
     state = SessionState(shell=shell, prompt_template=prompt_template,
                          speed=speed, test_mode=test_mode,
-                         commentecho=commentecho)
+                         commentecho=commentecho, commentformat=commentformat)
+
+    comments_buffer = []
 
     i = 0
+    tcols, trows = click.get_terminal_size()
     while i < len(commands):
         command = commands[i].strip()
         i += 1
+
         if not command:
+            print_comments(state, comments_buffer)
             continue
         shell_match = SHELL_RE.match(command)
-        if command.startswith('#'):
+        if command.startswith('########'):
+            tcols, trows = click.get_terminal_size()
+            crow, ccol = terminal.get_location()
+            print_comments(state, comments_buffer)
+            voffset = (trows - crow)
+            hoffset = tcols / 2 - 20
+            message = click.style('( Press any key to continue )', fg='cyan', blink=False)
+            click.pause('\n' * voffset + ' ' * hoffset + message)
+            click.clear()
+        elif command.startswith('#'):
             # Parse comment magic
             match = OPTION_RE.match(command)
             if match:
+                print_comments(state, comments_buffer)
                 option, arg = match.group('option'), match.group('arg')
                 func = OPTION_MAP[option]
                 func(state, arg)
             elif state.commentecho():
-                comment = command.lstrip("#")
-                secho(comment, fg='yellow', bold=True)
+                comments_buffer.append(command[2:])
             continue
-        elif shell_match:
-            shell_name = shell_match.groups()[0].strip()
-            py_commands = []
-            more = True
-            while more:  # slurp up all the python code
-                try:
-                    py_command = commands[i].rstrip()
-                except IndexError:
-                    raise SessionError('Unmatched {0} code block in '
-                                       'session file.'.format(shell_name))
-                i += 1
-                if py_command.startswith('```'):
-                    i += 1
-                    more = False
-                else:
-                    py_commands.append(py_command)
-            # Run the player console
-            magictype(shell_name,
-                      prompt_template=state['prompt_template'],
-                      speed=state['speed'])
-            if shell_name == 'ipython':
-                try:
-                    from doitlive.ipython import start_ipython_player
-                except ImportError:
-                    raise RuntimeError('```ipython blocks require IPython to be installed')
-                start_ipython_player(py_commands, speed=state['speed'])
-            else:
-                start_python_player(py_commands, speed=state['speed'])
         else:
-            magicrun(command, **state)
+            print_comments(state, comments_buffer)
+            if shell_match:
+                shell_name = shell_match.groups()[0].strip()
+                py_commands = []
+                more = True
+                while more:  # slurp up all the python code
+                    try:
+                        py_command = commands[i].rstrip()
+                    except IndexError:
+                        raise SessionError('Unmatched {0} code block in '
+                                           'session file.'.format(shell_name))
+                    i += 1
+                    if py_command.startswith('```'):
+                        i += 1
+                        more = False
+                    else:
+                        py_commands.append(py_command)
+                # Run the player console
+                magictype(shell_name,
+                          prompt_template=state['prompt_template'],
+                          speed=state['speed'])
+                if shell_name == 'ipython':
+                    try:
+                        from doitlive.ipython import start_ipython_player
+                    except ImportError:
+                        raise RuntimeError('```ipython blocks require IPython to be installed')
+                    start_ipython_player(py_commands, speed=state['speed'])
+                else:
+                    start_python_player(py_commands, speed=state['speed'])
+            else:
+                magicrun(command, **state)
     echo_prompt(state['prompt_template'])
     wait_for(RETURNS)
     secho("FINISHED SESSION", fg='yellow', bold=True)
@@ -620,12 +663,17 @@ def themes(preview, list):
     else:
         list_themes()
 
+
 QUIET_OPTION = click.option('--quiet', '-q', help='Suppress startup message.',
                             is_flag=True, default=False, show_default=False)
 
 ECHO_OPTION = click.option('--commentecho', '-e',
                            help='Echo non-magic comments.', is_flag=True,
                            default=False, show_default=False)
+
+FORMAT_OPTION = click.option('--commentformat', '-f', metavar='<format>',
+                            default='plain', help="Either 'plain' or 'markdown'.",
+                            show_default=True)
 
 SHELL_OPTION = click.option('--shell', '-S', metavar='<shell>',
                             default='/bin/bash', help='The shell to use.',
@@ -652,9 +700,10 @@ def _compose(*functions):
         return lambda x: func1(func2(x))
     return functools.reduce(inner, functions)
 
+
 # Compose the decorators into "bundled" decorators
 player_command = _compose(QUIET_OPTION, SHELL_OPTION, SPEED_OPTION,
-                          PROMPT_OPTION, ECHO_OPTION)
+                          PROMPT_OPTION, ECHO_OPTION, FORMAT_OPTION)
 recorder_command = _compose(SHELL_OPTION, PROMPT_OPTION, ALIAS_OPTION,
                             ENVVAR_OPTION)
 
@@ -662,7 +711,7 @@ recorder_command = _compose(SHELL_OPTION, PROMPT_OPTION, ALIAS_OPTION,
 @player_command
 @click.argument('session_file', type=click.File('r', encoding='utf-8'))
 @cli.command()
-def play(quiet, session_file, shell, speed, prompt, commentecho):
+def play(quiet, session_file, shell, speed, prompt, commentecho, commentformat):
     """Play a session file."""
     run(session_file.readlines(),
         shell=shell,
@@ -670,7 +719,9 @@ def play(quiet, session_file, shell, speed, prompt, commentecho):
         quiet=quiet,
         test_mode=TESTING,
         prompt_template=prompt,
-        commentecho=commentecho)
+        commentecho=commentecho,
+        commentformat=commentformat)
+
 
 DEMO = [
     'echo "Greetings"',
@@ -682,10 +733,10 @@ DEMO = [
 
 @player_command
 @cli.command()
-def demo(quiet, shell, speed, prompt, commentecho):
+def demo(quiet, shell, speed, prompt, commentecho, commentformat):
     """Run a demo doitlive session."""
     run(DEMO, shell=shell, speed=speed, test_mode=TESTING,
-        prompt_template=prompt, quiet=quiet, commentecho=commentecho)
+        prompt_template=prompt, quiet=quiet, commentecho=commentecho, commentformat=commentformat)
 
 
 HEADER_TEMPLATE = """# Recorded with the doitlive recorder

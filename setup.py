@@ -6,6 +6,8 @@ from setuptools import setup
 
 REQUIRES = [
     'click>=4.0',
+    'mdv>=1.6',
+    'blessed>=1.14'
 ]
 
 if 'win32' in str(sys.platform).lower():
