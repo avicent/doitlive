@@ -40,7 +40,7 @@ from doitlive.version_control import (
     get_current_vcs_branch
 )
 
-__version__ = '2.6.0.1'
+__version__ = '2.6.0-av.1'
 __author__ = 'Steven Loria'
 __license__ = 'MIT'
 

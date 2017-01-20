@@ -66,7 +66,12 @@ Example
 Dependencies
 ------------
 
-For best results use `avicent/mdv`_ instead of the original `axiros/mdv`_.
+This fork introduces the following dependencies on top of the upstream ones:
+
+- ``mdv``
+    - Used for rendering the markdown comments to the terminal .  Note that the dependency to ``mdv`` in ``setup.py`` is pointing to `avicent/mdv`_ and not the original ``mdv`` from `axiros/mdv`_ in order to improve some rendering aesthetics. The official ``mdv`` should also work, though.
+- ``blessed``
+    - Used for positioning the cursor.
 
 More information
 ----------------

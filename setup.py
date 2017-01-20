@@ -6,8 +6,12 @@ from setuptools import setup
 
 REQUIRES = [
     'click>=4.0',
-    'mdv>=1.6',
-    'blessed>=1.14'
+    'blessed>=1.14',
+    'mdv==1.6.3-av.1'
+]
+
+DEPENDENCIES = [
+    'https://github.com/avicent/terminal_markdown_viewer/tarball/1.6.3-av.1#egg=mdv-1.6.3-av.1',
 ]
 
 if 'win32' in str(sys.platform).lower():
@@ -46,6 +50,7 @@ setup(
     author_email='sloria1@gmail.com',
     url='https://github.com/sloria/doitlive',
     install_requires=REQUIRES,
+    dependency_links=DEPENDENCIES,
     license='MIT',
     zip_safe=False,
     keywords='doitlive cli live coding presentations shell',
