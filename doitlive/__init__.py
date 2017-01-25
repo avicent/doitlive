@@ -40,7 +40,7 @@ from doitlive.version_control import (
     get_current_vcs_branch
 )
 
-__version__ = '2.6.0-av.1'
+__version__ = '2.6.0-av.2'
 __author__ = 'Steven Loria'
 __license__ = 'MIT'
 
@@ -96,7 +96,8 @@ BACKSPACE = '\x7f'
 RETURNS = {'\r', '\n'}
 OPTION_RE = re.compile(r'^#\s?doitlive\s+'
                        r'(?P<option>prompt|shell|alias|env|speed'
-                       r'|unalias|unset|commentecho|commentformat|click|cd):\s*(?P<arg>.+)$')
+                       r'|unalias|unset|commentecho|commentformat'
+                       r'|markdowntheme|click|cd):\s*(?P<arg>.+)$')
 
 TESTING = False
 
@@ -339,7 +340,8 @@ def magictype(text, prompt_template='default', speed=1):
                     cursor_position += speed
 
 def magicrun(text, shell, prompt_template='default', aliases=None,
-             envvars=None, speed=1, test_mode=False, commentecho=False, commentformat='plain'):
+             envvars=None, speed=1, test_mode=False, commentecho=False,
+             commentformat='plain', markdown_theme=None):
     magictype(text, prompt_template, speed)
     run_command(text, shell, aliases=aliases, envvars=envvars,
                 test_mode=test_mode)
@@ -461,7 +463,8 @@ class SessionState(dict):
         envvars = envvars or []
         dict.__init__(self, shell=shell, prompt_template=prompt_template,
                       speed=speed, aliases=aliases, envvars=envvars,
-                      test_mode=test_mode, commentecho=commentecho, commentformat=commentformat)
+                      test_mode=test_mode, commentecho=commentecho, commentformat=commentformat,
+                      markdown_theme="default")
 
     def add_alias(self, alias):
         self['aliases'].append(alias)
@@ -505,6 +508,9 @@ class SessionState(dict):
                 self['commentformat'] = 'plain'
         return self['commentformat']
 
+    def markdowntheme(self, theme=None):
+        if theme is not None:
+            self['markdown_theme']=theme
 
 # Map of option names => function that modifies session state
 OPTION_MAP = {
@@ -517,6 +523,7 @@ OPTION_MAP = {
     'unset': lambda state, arg: state.remove_envvar(arg),
     'commentecho': lambda state, arg: state.commentecho(arg),
     'commentformat': lambda state, arg: state.commentformat(arg),
+    'markdowntheme': lambda state, arg: state.markdowntheme(arg),
     'cd': lambda state, arg: os.chdir(arg),
     'click': lambda state, arg: getattr(click, arg)(),
 }
@@ -525,7 +532,8 @@ SHELL_RE = re.compile(r'```(python|ipython)')
 def print_comments(state, comments_buffer):
     if comments_buffer:
         if state.commentformat() == 'markdown':
-            echo(mdv("\n".join(comments_buffer), theme="630.2337"), nl=False)
+            echo(mdv("\n".join(comments_buffer), theme=state['markdown_theme']),
+                    nl=False)
         else:
             secho("\n".join(comments_buffer))
         del comments_buffer[:]

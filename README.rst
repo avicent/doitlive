@@ -23,6 +23,8 @@ The following magic-comments/directives are supported:
 
 - ``#doitlive commentformat: [markdown|plain]``
     - Tells `doitlive` to interpret the comments as markdown-encoded and, provided ``commentecho`` is on, to render them using ``mdv`` (see Dependecies below). Note that the leading the hash character and the first space are stripped from the original line before rendering them as markdown.
+- ``#doitlive markdowntheme: <theme>``
+    - Tells `doitlive` to force ``mdv`` into using the specified theme for both text and code. Run ``mdv -it all`` to see theme samples.
 - ``#doitlive click: <method>``
     - Instructs `doitlive` to call ``click.<method>()``. This can be useful to pause after echoing some of the comments.
 - ``#doitlive cd: <path>``
@@ -40,6 +42,7 @@ Example
     #doitlive commentecho: true
     #doitlive speed: 1000
     #doitlive commentformat: markdown
+    #doitlive markdowntheme: 884.0134
     
     # # DEMONSTRATING DOITLIVE (1/2)
     #
