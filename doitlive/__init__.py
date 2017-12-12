@@ -40,7 +40,7 @@ from doitlive.version_control import (
     get_current_vcs_branch
 )
 
-__version__ = '2.6.0-av.2'
+__version__ = '2.6.0-av.3'
 __author__ = 'Steven Loria'
 __license__ = 'MIT'
 
@@ -92,6 +92,7 @@ THEMES = OrderedDict([
 
 
 ESC = '\x1b'
+CTRLC = '\x03'
 BACKSPACE = '\x7f'
 RETURNS = {'\r', '\n'}
 OPTION_RE = re.compile(r'^#\s?doitlive\s+'
@@ -293,7 +294,6 @@ def run_command(cmd, shell=None, aliases=None, envvars=None, test_mode=False):
             # Write envvars and aliases
             write_commands(fp, 'export', envvars)
             write_commands(fp, 'alias', aliases)
-
             cmd_line = cmd + '\n'
             fp.write(ensure_utf(cmd_line))
             fp.flush()
@@ -307,7 +307,7 @@ def run_command(cmd, shell=None, aliases=None, envvars=None, test_mode=False):
 def wait_for(chars):
     while True:
         in_char = getchar()
-        if in_char == ESC:
+        if in_char == ESC or in_char == CTRLC:
             echo(carriage_return=True)
             raise click.Abort()
         if in_char in chars:
@@ -322,7 +322,7 @@ def magictype(text, prompt_template='default', speed=1):
         while True:
             char = text[cursor_position:cursor_position + speed]
             in_char = getchar()
-            if in_char == ESC:
+            if in_char == ESC or in_char == CTRLC:
                 echo(carriage_return=True)
                 raise click.Abort()
             elif in_char == BACKSPACE:
@@ -568,9 +568,12 @@ def run(commands, shell='/bin/bash', prompt_template='default', speed=1,
             crow, ccol = terminal.get_location()
             print_comments(state, comments_buffer)
             voffset = (trows - crow)
-            hoffset = tcols / 2 - 20
-            message = click.style('( Press any key to continue )', fg='cyan', blink=False)
-            click.pause('\n' * voffset + ' ' * hoffset + message)
+            hoffset = int(tcols / 2) - 20
+            secho('\n' * voffset + ' ' * hoffset + '( Press any key to continue )', fg='cyan', blink=True, nl=False)
+            in_char = click.getchar()
+            if in_char == ESC or in_char == CTRLC:
+                echo(carriage_return=True)
+                raise click.Abort()
             click.clear()
         elif command.startswith('#'):
             # Parse comment magic
